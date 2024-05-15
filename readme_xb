@@ -1,0 +1,159 @@
+
+
+NVIDIA Docs Hub  NVIDIA Networking  BlueField DPUs / SuperNICs & DOCA  DOCA Documentation v2.7.0  NVIDIA SM
+https://docs.nvidia.com/doca/sdk/nvidia+sm/index.html
+NVIDIA SM 是兼容 InfiniBand 的子网管理器 (SM)。 它作为一个名为“opensm”的固定流程可执行文件提供，并附带一个名为 osmtest 的测试应用程序。 NVIDIA SM 根据 InfiniBand 架构规范章节实现 InfiniBand 兼容 SM：管理模型、子网管理和子网管理。 OpenSM 应用程序 OpenSM 是一个 InfiniBand 兼容子网管理器和子网管理器，运行在 NVIDIA OFED 堆栈之上。 OpenSM 执行 InfiniBand 规范所需的任务来初始化 InfiniBand 硬件。 每个 InfiniBand 子网必须运行一个 SM。 OpenSM 默认值旨在满足最多数百个节点的集群上的常见情况使用。 因此，在此默认模式下，OpenSM 将扫描 IB 结构，对其进行初始化，并偶尔扫描是否有更改。 OpenSM 连接到本地计算机上的特定 IB 端口，并仅配置与其连接的结构。 （如果本地计算机有其他 IB 端口，OpenSM 将忽略连接到这些其他端口的结构）。 如果未指定端口，opensm 将选择第一个“最佳”可用端口。 opensm 还可以显示可用端口并提示输入要连接的端口号。 默认情况下，OpenSM 运行记录到/var/log/opensm.log。 此日志文件中报告的所有错误均应视为 IB 结构运行状况问题的指标。 （请注意，当发生致命且不可恢复的错误时，OpenSM 将退出）。 如果 OpenSM 能够正确设置子网，opensm.log 应包含消息“SUBNET UP”。 句法
+
+环境变量，以下环境变量控制 OpenSM 行为： 
+OSM_TMP_DIR - 控制在其中创建 OpenSM 生成的临时文件的目录。 这些文件是：opensm-subnet.lst、opensm.fdbs 和 opensm.mcfdbs。 默认情况下，该目录是/var/log。 
+OSM_CACHE_DIR - opensm 将某些数据存储到磁盘，以便后续运行保持一致。 使用的默认目录是/var/cache/opensm。 其中包含以下文件：guid2lid – 存储分配给每个 GUID 的 LID 范围
+
+osmtest,osmtest 是用于验证 InfiniBand 子网管理器和子网管理员的测试程序。 osmtest 为 opensm 提供了一个测试套件。 它可以创建所有可用节点、端口和 PathRecords 的清单文件，包括它们的所有字段。 它还可以验证现有清单的所有对象字段，并将其与预先保存的清单进行匹配。osmtest 具有以下测试流程： 组播合规性测试 事件转发测试 服务记录注册测试 RMPP 压力测试 小 SA 查询压力测试 了解更多信息 ，请参阅该工具的手册页
+
+分区，OpenSM 支持在 InfiniBand 结构中配置分区 (PKey)。 默认情况下，OpenSM 在名称 /etc/opensm/partitions.conf 下搜索分区配置文件。 要更改此文件名，您可以使用带有“--Pconfig”或“-P”标志的 opensm。 即使分区配置文件不存在或无法访问，OpenSM也会无条件地创建默认分区。 默认分区的 P_Key 值为 0x7fff(0111 1111 1111 1111)。 运行 OpenSM 的端口被分配默认分区中的完整成员资格。 所有其他终端端口都被分配部分成员资格。 注意将新分区添加到partition.conf文件中，不需要SM重新启动，而是通过HUP信号（例如pkill -HUP opensm）向SM进程发出信号。 默认分区无法删除。 注意 对端口 GUID 的调整，包括添加、删除或成员资格更改（在“分区定义”中表示为“<PortGUID>=[full|limited|both]”）可以通过 HUP 信号应用于子网管理器进程 （例如 pkill -HUP opensm）。 警告 对现有分区的 ipoib_bc_flags (ipoib/sl/scope/rate/mtu) 和 mgroup 标志执行更改需要重新启动子网管理器才能生效。 文件格式 注意 '#' 字符后面的行内容是注释，会被解析器忽略。 通用文件格式
+
+拓扑更改的影响，如果添加或删除链路，OpenSM 可能不会重新计算不必更改的路由。 如果端口不再处于 UP 状态或不再是 MinHop，则必须更改路由。 当执行路由更改时，会调用相同的算法来平衡路由。在使用基于文件的路由的情况下，当前会忽略任何拓扑更改。 “文件”路由引擎仅从指定的文件加载 LFT，对真实拓扑没有反应。 显然，这将无法重新检查断开连接的节点的 LID（通过 GUID），并且将跳过不存在的交换机的 LFT。 组播不受“文件”路由引擎的影响（这使用最小跳表）
+
+路由算法，OpenSM 提供以下路由引擎： 最小跳数算法 基于到每个节点的最小跳数，其中路径长度得到优化。 UPDN算法基于到每个节点的最小跳数，但它受到排序规则的限制。 如果子网不是纯胖树，则应选择该算法，并且可能因子网中存在环路而发生死锁。 胖树路由算法 该算法针对无拥塞的“转移”通信模式优化路由。 如果子网是各种类型的对称胖树（而不仅仅是 K 叉 N 树），则应选择该子网：非恒定 K、非满员以及任意 CBB 比率。 与 UPDN 类似，Fat Tree 路由受到排序规则的约束。 DOR 路由算法 基于最小跳数算法，但避免端口均衡（同一两台交换机之间的冗余链路除外）。 当结构作为超立方体布线时，这为超立方体提供无死锁路由；当结构作为网格布线时，这为网格提供无死锁路由。 Torus-2QoS 路由算法 基于专用于 2D/3D 环面拓扑的 DOR 单播路由算法。 Torus-2QoS 提供无死锁路由，同时支持两种服务质量 (QoS) 级别。 此外，它还可以绕多个故障光纤链路或单个故障光纤交换机进行路由，而不会引入死锁，也不会更改故障之前授予的路径 SL 值。 路由链 允许通过不同的路由引擎对单个 InfiniBand 子网的不同部分进行路由配置。 在当前版本中，可以组合 minhop/updn/ftree/dor/torus-2QoS/pqft
+
+注意，请注意，不支持 LASH 路由算法。 MINHOP/UPDN/DOR 路由算法由两个阶段组成： MinHop 矩阵计算。 从每个端口到每个 LID 需要多少跳。 如果您运行标准（最小跳数）或向上/向下，填充这些表的算法会有所不同。 对于标准路由，使用“松弛”算法通过邻居交换机从每个目标 LID 传播最小跳数。 对于上/下路由，使用来自每个目标的 BFS。 BFS 跟踪链路方向（向上或向下）并避免在使用向下步骤后执行向上的步骤。 一旦存在 MinHop 矩阵，就会访问每个交换机，并针对每个目标 LID 决定应使用哪个端口来到达该 LID。 此步骤对于标准和向上/向下路由是常见的。 每个端口都有一个计数器，用于计算通过它的目标 LID 的数量。 当存在多个与 LID 具有相同 MinHop 的替代端口时，会选择之前分配的端口较少的一个。如果 LMC > 0，则会添加更多检查。 在分配给相同目标端口的每组 LID 中： 仅使用具有相同 MinHop 的端口 首先优先选择那些进入不同 systemImageGuid 的端口（然后是同一 LMC 组的前一个 LID） 如果没有，则优先选择那些经过另一个 NodeGuid 的端口 回退 路径数方法（如果全部都去同一个节点）。 最小跳数算法 如果没有指定路由算法，则默认调用最小跳数算法。 也可以通过指定“-R minhop”来调用。Min Hop 算法分为两个阶段：计算每个交换机上的 min-hop 表和 LFT 输出端口分配。 链接订阅还可以根据端口 GUID 进行覆盖。 后者由以下机构提供：
+
+此选项提供了定义一组端口（通过 GUID）的方法，这些端口将被链路负载均衡算法忽略。LMC 感知路由基于（远程）系统或交换机。
+
+Constant Bisectional Ratio (CBB )ratio: 恒定二等分比 (CBB) 比率
+
+
+
+
+opensm/main.c
+    ...
+    show_usage
+
+
+
+osmtest -f a -> All Validations
+osmtest/main.c -> main
+    osm_vendor_set_debug
+        umad_debug(level)
+    complib_init_v2
+        __cl_timer_prov_create
+        cl_qlist_init(&gp_timer_prov->queue)
+        pthread_create(&gp_timer_prov->thread, NULL, __cl_timer_prov_cb, NULL)
+            p_timer->pfn_callback((void *)p_timer->context)
+    osmtest_init
+        osmtest_construct
+            subnet_construct(&p_osmt->exp_subn)
+                cl_qmap_init(&p_subn->link_tbl)
+                ...
+        osm_log_init_v2
+            openlog("OpenSM", LOG_CONS | LOG_PID, LOG_USER)
+        osm_log_set_level
+            osm_log(p_log, OSM_LOG_ALL, "Setting log level to: 0x%02x\n", level)
+                vsprintf(buffer, p_str, args)
+                syslog(LOG_INFO, "%s\n", buffer)
+                time_usecs = cl_get_time_stamp()
+                truncate_log_file
+        cl_qpool_init(&p_osmt->node_pool, POOL_MIN_ITEMS, 0,
+            cl_qcpool_init __cl_qpool_init_cb -> p_pool->pfn_init
+                cl_qcpool_construct
+                cl_qcpool_grow
+                    cl_qlist_insert_tail(&p_pool->alloc_list, (cl_list_item_t *) p_objects)
+                    cl_qlist_insert_head(&p_pool->free_list,
+        cl_qpool_init(&p_osmt->port_pool, POOL_MIN_ITEMS, 0,
+        osm_vendor_new(&p_osmt->log,
+            osm_vendor_init
+                osm_pkt_randomizer_init
+        osm_mad_pool_construct(&p_osmt->mad_pool) -> memset(p_pool, 0, sizeof(*p_pool))
+        osm_mad_pool_init(&p_osmt->mad_pool)
+            p_pool->mads_out = 0 -> typedef struct osm_mad_pool -> OpenSM/MAD 池，MAD 池封装了 OpenSM 管理 MAD 对象池所需的信息。 OpenSM 为每个 IBA 子网分配一个 MAD 池。 MAD 池是线程安全的。 该对象应被视为不透明，并且只能通过提供的函数进行操作
+    print_all_guids
+        osm_vendor_get_all_port_attr
+            __osm_vendor_get_ca_ids
+                EVAPI_list_hcas
+            __osm_ca_info_init
+            __osm_ca_info_get_port_attr_ptr
+        for (i = 0; i < num_ports; i++)
+            printf("Port %i: 0x%" PRIx64 "\n", i, cl_hton64(attr_array[i].port_guid))
+    get_port_guid
+        osm_vendor_get_all_port_attr
+        (!port_guid && attr_array[i].link_state > IB_LINK_DOWN))
+    osmtest_bind
+        osm_vendor_get_all_port_attr
+        osmtest_get_user_port
+            ib_get_port_state_str(p_attr_array[i].link_state))
+                return (__ib_port_state_str[port_state])
+            fflush(stdout)
+        p_osmt->h_bind = osmv_bind_sa(p_osmt->p_vendor, &p_osmt->mad_pool, guid)
+            bind_info.port_guid = port_guid
+            bind_info.mad_class = IB_MCLASS_SUBN_ADM -> Management Class, Subnet Administration (13.4.4)
+            p_sa_bind_info->h_bind = osm_vendor_bind(p_vend, &bind_info, p_mad_pool, __osmv_sa_mad_rcv_cb, __osmv_sa_mad_err_cb, p_sa_bind_info)
+                p_bo->recv_cb = mad_recv_callback <- __osmv_dispatch_simple_mad
+                osm_vendor_get_guid_ca_and_port
+                osmv_txnmgr_init
+                    cl_event_wheel_construct
+                    cl_event_wheel_init_ex
+                        cl_event_wheel_init
+                    cl_qmap_init(p_tx_mgr->p_txn_map)
+                osmv_transport_init
+                osmv_txnmgr_done
+                osmv_transport_done
+                osmv_txnmgr_done
+                cl_qlist_set_obj(p_obj, p_bo)
+                cl_qlist_insert_head(&p_vend->bind_handles, &p_obj->list_item)
+            __osmv_get_lid_and_sm_lid_by_port_guid
+            cl_event_construct(&p_sa_bind_info->sync_event)
+            cl_event_init(&p_sa_bind_info->sync_event, TRUE)
+    osmtest_run
+        osmtest_get_sm_gid
+        osmtest_validate_sa_class_port_info
+            osmv_query_sa
+        osmtest_create_inventory_file
+        osmtest_stress_small_rmpp
+        osmtest_stress_large_rmpp
+        osmtest_create_db
+        osmtest_stress_large_rmpp_pr
+        osmtest_stress_get_pr
+        osmtest_create_db(p_osmt)
+        osmtest_validate_against_db(p_osmt)
+        osmtest_wrong_sm_key_ignored(p_osmt)
+        osmt_run_service_records_flow(p_osmt)
+        osmt_run_slvl_and_vlarb_records_flow
+        osmt_run_trap64_65_flow
+        status = osmt_run_mcast_flow(p_osmt)
+    osmtest_destroy
+    complib_exit
+
+
+quick_map, 快速地图，描述 快速地图实现存储用户提供的 cl_map_item_t 结构的二叉树。 快速地图中存储的每个项目都有一个唯一的 64 位密钥（不允许重复）。 快速地图提供了根据给定的键有效搜索项目的能力。 快速地图不分配任何内存，因此不会因内存不足而导致任何操作失败。 因此，快速映射有助于最大限度地减少代码中的错误路径。 快速地图不是线程安全的，用户在向地图添加和删除项目时必须提供序列化。 快速映射函数在 cl_qmap_t 结构上运行，该结构应被视为不透明，并且只能通过提供的函数进行操作。 另请参见 结构：cl_qmap_t、cl_map_item_t、cl_map_obj_t 回调：cl_pfn_qmap_apply_t 项目操作：cl_qmap_set_obj、cl_qmap_obj、cl_qmap_key 初始化：cl_qmap_init 迭代：cl_qmap_end、cl_qmap_head、cl_qmap_tail、 map_next、cl_qmap_prev 操作：cl_qmap_insert、cl_qmap_get、cl_qmap_remove_item、cl_qmap_remove、cl_qmap_remove_all、cl_qmap_merge、cl_qmap_delta、 cl_qmap_get_next 搜索：cl_qmap_apply_func 属性：cl_qmap_count、cl_is_qmap_empty、******** **i* 组件库：快速地图/cl_map_color_t 名称 cl_map_color_t 说明 cl_map_color_t 枚举类型用于标注地图中节点的颜色。 概要
+
+p_pool->pfn_init = pfn_initializer
+
+
+
+libvendor/osm_vendor_ibumad.c -> osm_vendor_get_all_port_attr
+    for (i = 0; i < p_vend->ca_count && !done; i++)
+        umad_get_ca(p_vend->ca_names[i], &ca) -> get ca from sysfs
+        attr->p_gid_table[0].unicast.prefix = cl_hton64(ca.ports[j]->gid_prefix)
+    *p_num_ports = attr - p_attr_array
+
+
+Defines the link states of a port
+#define IB_LINK_NO_CHANGE 0
+#define IB_LINK_DOWN      1
+#define IB_LINK_INIT	  2
+#define IB_LINK_ARMED     3
+#define IB_LINK_ACTIVE    4
+#define IB_LINK_ACT_DEFER 5
+
+static const char *const __ib_port_state_str[] = {
+	"No State Change (NOP)",
+	"DOWN",
+	"INIT",
+	"ARMED",
+	"ACTIVE",
+	"ACTDEFER",
+	"UNKNOWN"
+};
+
+
+
